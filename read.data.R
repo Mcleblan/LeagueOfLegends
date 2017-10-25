@@ -2,6 +2,7 @@ library(data.table)
 library(ggplot2)
 library(scales)
 source('plot.functions.R')
+source('models.R')
 
 ReadData <- function(){
   match.dt <<- fread('matches.csv')
@@ -13,7 +14,9 @@ ReadData <- function(){
 }
 
 Formatdata <- function(players.dt){
-  players.dt[,matchid := as.integer(matchid)]
+  #fixes the weird '\N' character to NA and converts the rest back to integers
+  players.dt[wardsbought=='\\N',wardsbought := NA]
+  players.dt[,wardsbought := as.integer(wardsbought)]
   #adding duration for ease of computation later on
   players.dt <- merge(players.dt,match.dt[,.(id,duration)],by.x='matchid',by.y='id')
   return(players.dt)
@@ -29,9 +32,7 @@ SimpleClassification <- function(){
 
 #### Execution ####
 
-ReadData()
-players.dt <- Formatdata(players.dt)
+# ReadData()
+# players.dt <- Formatdata(players.dt)
 
-#SimpleClassification()
-#WinningHistogram(players.dt,'wardsplaced')
-#WinningHistogramNormalized(players.dt,'totdmgtochamp')
+model1 <- PositionGoldLinearModel(players.dt)
