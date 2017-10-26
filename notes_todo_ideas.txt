@@ -15,3 +15,7 @@ Some ideas / todos :
 ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
 
 1 - test whether or not jungle forgetting to take Smite has a big impact on the win rate 
+
+2 - improve the models with calculated variables, such as dividing by duration where it makes sense. Create categorical where appropriate
+
+3 - run subset & feature selection

@@ -51,6 +51,7 @@ FormatPlayerData <- function(players.dt){
   #removing buggy columns
   players.dt[,wardsbought := NULL]#some erros in its fields
   players.dt[,timecc := NULL]#always0
+  players.dt[,neutralminionskilled:=NULL] #this is ownjungle + enemyjungle, so having all 3 results in a non full rank matrix.
   
   #fixing one row with missing data:
   id.bugged <- na.omit(players.dt,invert=T)$id
@@ -114,7 +115,7 @@ CreateTeamData <- function(players.dt){
       goldearned = sum(goldearned,na.rm=T),
       goldspent = sum(goldspent,na.rm=T),
       totminionskilled = sum(totminionskilled,na.rm=T),
-      neutralminionskilled = sum(neutralminionskilled,na.rm=T),
+      #neutralminionskilled = sum(neutralminionskilled,na.rm=T),
       ownjunglekills = sum(ownjunglekills,na.rm=T),
       enemyjunglekills = sum(enemyjunglekills,na.rm=T),
       totcctimedealt = sum(totcctimedealt,na.rm=T),
@@ -134,11 +135,12 @@ CreateTeamData <- function(players.dt){
 
 
 #### Execution ####
-
-# ReadData()
-# players.dt <- FormatPlayerData(players.dt)
-# teams.dt <- CreateTeamData(players.dt)
-# id.mapping.list <- GetJsonFiles()
+# 
+ReadData()
+players.dt <- FormatPlayerData(players.dt)
+teams.dt <- CreateTeamData(players.dt)
+id.mapping.list <- GetJsonFiles()
 
 #model.team <- CompleteTeamModel(teams.dt)
-model.player <- CompletePlayerModel(players.dt)
+#model.player <- CompletePlayerModel(players.dt,T)
+k.fold.results <- CompleteTeamModel_kCV(teams.dt)

@@ -34,3 +34,14 @@ WinningHistogramNormalized <- function(players.dt,variable,filter=-1){
     theme(axis.text.x = element_text(angle=90))
   print(plot1)
 }
+
+WinningProbBoxPlot <- function(validation){
+  validation[Actual==1,ActualFactor:='Won']
+  validation[Actual==0,ActualFactor:='Lost']
+  plot1 <- ggplot(data = validation) + 
+    geom_boxplot(aes(x = ActualFactor,y = WinningProbality,fill=ActualFactor)) +
+    theme_bw() +
+    guides(fill=F)+ 
+    labs(title='Predicted Winning Probability vs Actual',x='',y='predicted Winning Probability')
+  print(plot1)
+}
