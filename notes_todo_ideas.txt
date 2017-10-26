@@ -1,0 +1,17 @@
+Notes & recent discovery : 
+¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+1 - it turns out that teamid 100 is the first 5 players and teamid 200 is the last 5 EXCEPT for 3v3 games. I think we should remove them from our analysis, which is what I will do from now on, i.e. I will only keep the queue id 420 & 440
+
+2 - Two ways of going about the project, predict the probability of winning the game for a specific players, or predict the probability for a specific teams. I don't know which is the most interesting yet.
+
+3 - good predicting power from the complete team dataset (98%+) which is not too surpring, challenge will be to select the most parsimonious model now
+
+4 - championid, itemid, spellid are all logged into json format from the league of legends data dragon, i.e in links like 
+http://ddragon.leagueoflegends.com/cdn/6.24.1/data/en_US/summoner.json. 
+I have created a quick and dirty function to deparse the json for the items and spells into a R list.
+
+
+Some ideas / todos :
+¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+
+1 - test whether or not jungle forgetting to take Smite has a big impact on the win rate 

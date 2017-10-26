@@ -22,5 +22,5 @@ neutralminionskilled
 ownjunglekills
 enemyjunglekills
 totcctimedealt
-champlvlpinksboughtwardsboughtwardsplaced
-wardskilledfirstbloodduration
+champlvlpinksboughtfirstbloodwardsboughtwardsplaced
+wardskilledduration
