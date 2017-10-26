@@ -35,10 +35,13 @@ CompleteTeamModel <- function(teams.dt){
 }
 
 CompletePlayerModel <- function(players.dt){
-  model.data <- players.dt[,!c("matchid","teamid","player","id","championid")]
-  model <- glm(data=players.dt[,!c("matchid","teamid","player")],formula= win~.,family='binomial')
+  #remove categorical variables for the moment (+ non variables like teamid)
+  model.data <- players.dt[,!c("queueid","matchid","teamid","player","id","championid","ss1",
+                               "ss2","item1","item2","item3","item4","item5","item6","trinket")]
   
-  validation <- as.data.table(cbind(players.dt[,win],model$fitted.values))
+  model <- glm(data=model.data,formula= win~.,family='binomial')
+  
+  validation <- as.data.table(cbind(model.data[,win],model$fitted.values))
   setnames(validation,c('Actual','WinningProbality'))
   validation[,ActualFactor:=factor(Actual,levels=c('0','1'))]
   

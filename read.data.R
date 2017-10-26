@@ -48,9 +48,14 @@ GetJsonFiles <- function(){
 }
 
 FormatPlayerData <- function(players.dt){
-  #fixes the weird '\N' character to NA and converts the rest back to integers
-  players.dt[wardsbought=='\\N',wardsbought := NA]
-  players.dt[,wardsbought := as.integer(wardsbought)]
+  #removing buggy columns
+  players.dt[,wardsbought := NULL]#some erros in its fields
+  players.dt[,timecc := NULL]#always0
+  
+  #fixing one row with missing data:
+  id.bugged <- na.omit(players.dt,invert=T)$id
+  players.dt[id==id.bugged,totdmgdealt := magicdmgdealt+physicaldmgdealt]
+  players.dt[id==id.bugged,truedmgdealt := 0]
   
   #adding duration for ease of computation later on
   players.dt <- merge(players.dt,match.dt[,.(id,duration,queueid)],by.x='matchid',by.y='id')
@@ -101,7 +106,7 @@ CreateTeamData <- function(players.dt){
       dmgtoobj = sum(dmgtoobj,na.rm=T),
       dmgtoturrets = sum(dmgtoturrets,na.rm=T),
       visionscore = sum(visionscore,na.rm=T),
-      timecc = sum(timecc,na.rm=T),
+      #timecc = sum(timecc,na.rm=T),
       totdmgtaken = sum(totdmgtaken,na.rm=T),
       magicdmgtaken = sum(magicdmgtaken,na.rm=T),
       physdmgtaken = sum(physdmgtaken,na.rm=T),
@@ -130,10 +135,10 @@ CreateTeamData <- function(players.dt){
 
 #### Execution ####
 
-ReadData()
-players.dt <- FormatPlayerData(players.dt)
-teams.dt <- CreateTeamData(players.dt)
-id.mapping.list <- GetJsonFiles()
+# ReadData()
+# players.dt <- FormatPlayerData(players.dt)
+# teams.dt <- CreateTeamData(players.dt)
+# id.mapping.list <- GetJsonFiles()
 
 #model.team <- CompleteTeamModel(teams.dt)
-#model.player <- CompletePlayerModel(players.dt)
+model.player <- CompletePlayerModel(players.dt)
