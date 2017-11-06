@@ -1,0 +1,76 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% HEADER
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\documentclass[a4paper,oneside,10pt]{article}
+
+%% ZOTERO bibliography on windows partition
+
+%% Language %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage[USenglish]{babel} %francais, polish, spanish, ...
+\usepackage[T1]{fontenc}
+\usepackage[ansinew]{inputenc}
+\usepackage[section]{placeins}
+
+\usepackage{lmodern} %Type1-font for non-english texts and characters
+
+
+%% Packages for Graphics & Figures %%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage{graphicx} %%For loading graphic files
+%\usepackage{subfig} %%Subfigures inside a figure
+%\usepackage{pst-all} %%PSTricks - not useable with pdfLaTeX
+\usepackage{longtable}
+\usepackage{multirow}
+
+
+%% Math Packages %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{amsfonts}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% DOCUMENT
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{document}
+
+\pagestyle{empty} %No headings for the first pages.
+
+
+%% Title Page %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\title{Predicting League of Legends Match Winner}
+\author{Adrien de Castro\\
+        Martin le Blanc, \\
+        Ausra Pogozelskyte
+        }
+
+%\date{} %%If commented, the current date is used.
+\maketitle
+\begin{abstract}
+League of Legends is a popular computer game in which two teams of 5 players faces each other on a battlefield. The publisher of the game, Riot Games, has allowed the public to download match data via an API. These datasets consists of a collection of statistics about matches, such as amount of ressources collected, or number of kills on the enemy. This article will discuss methods of predicting the winner of matches using these datasets.
+\end{abstract}
+
+%\tableofcontents %Table of contents
+\clearpage
+
+\pagestyle{plain} %Now display headings: headings / fancy / ...
+
+\section{Quick explanation of the game}
+\begin{figure}[h]
+    \centering
+    \includegraphics[scale =0.55]{Map.jpg}
+    \caption{Summoners Rift Map (\#ref for source-Polygon)}
+    \label{fig:map}
+\end{figure}
+
+Two teams of five players (a blue and a red one) face each other on a battlefield (cf. fig.\ref{fig:map}). Each player plays a champion. The goal is to destroy the other teams Nexus (in green on the map). There are three lanes (top, middle, bottom). Special roles play in particular lanes (cf. "role" in table \ref{tab:players.dt}). The goal of the first round is to destroy the three opponents towers (the three dots per lane between the river and the base). When players on some lane manage to destroy the three towers, they move to help other players on other lanes or begin destroying the inhibitors (in yellow on the map). When all inhibitors and all towers on the lanes are destroyed, the players can move on to destroying the two towers before the Nexus and eventually destroying it, thus winning the game.
+
+The characters become stronger by buying items (with gold) or by levelling up (with experience). Gold and experience can be won by killing enemies, monsters, minions, completing objectives (?), destroying towers, inhibitors.
+
+For further details we refer you to variable descriptions (tables \ref{tab:players.dt}, \ref{tab:teams.dt}, \ref{tab:match.dt}, \ref{tab:teambans.dt} and \ref{tab:teamstats.dt}) and to \#ref-Polygon.
+
+\section{Dataset}
+
+\input{Variables.tex}
+
+\end{document}
+
