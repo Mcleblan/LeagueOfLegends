@@ -1,5 +1,13 @@
 #loading packages and sourcing external files
-library(data.table)
+
+#install.packages("data.table")
+#install.packages("ggplot2")
+#install.packages("scales")
+#install.packages("leaps")
+#install.packages("rjson")
+
+setwd('~/SLProject')
+
 library(ggplot2)
 library(scales)
 library(leaps)
@@ -7,6 +15,7 @@ library(rjson)
 source('plot.functions.R')
 source('models.R')
 
+#<<- assign to global environnement
 ReadData <- function(){
   match.dt <<- fread('matches.csv')
   #merging the two datasets removes 3 players from the 'participants' that do not appear in 'stats'. 
@@ -49,9 +58,11 @@ GetJsonFiles <- function(){
 
 FormatPlayerData <- function(players.dt){
   #removing buggy columns
-  players.dt[,wardsbought := NULL]#some erros in its fields
-  players.dt[,timecc := NULL]#always0
-  players.dt[,neutralminionskilled:=NULL] #this is ownjungle + enemyjungle, so having all 3 results in a non full rank matrix.
+  #players.dt[,wardsbought := NULL]#some errors in its fields
+  #players.dt[,timecc := NULL]#always0
+  #players.dt[,neutralminionskilled:=NULL] #this is ownjungle + enemyjungle, so having all 3 results in a non full rank matrix.
+  del <- c("wardsbought", "timecc", "neutralminionskilled")
+  players.dt[, !(names(players.dt) %in% del)]
   
   #fixing one row with missing data:
   id.bugged <- na.omit(players.dt,invert=T)$id
@@ -135,12 +146,75 @@ CreateTeamData <- function(players.dt){
 
 
 #### Execution ####
-# 
+# Data
 ReadData()
 players.dt <- FormatPlayerData(players.dt)
 teams.dt <- CreateTeamData(players.dt)
 id.mapping.list <- GetJsonFiles()
 
-#model.team <- CompleteTeamModel(teams.dt)
-#model.player <- CompletePlayerModel(players.dt,T)
+# Check for missing values
+sum(is.na(players.dt))
+sum(is.na(teams.dt))
+
+# NORMALIZE THE DATA 
+#PCA 
+pca <- princomp(teams.dt)
+
+
+
+################# Create train/test set for team.dt #############
+set.seed(0)
+# Which ratio of the data used for training, testing, validating
+train.ratio <- 0.5
+test.ratio <- 0.4
+validate.ratio <- 1 - train.ratio - test.ratio
+
+# Deduce the number of samples needed in our training set
+nb.train <- floor(train.ratio*dim(teams.dt)[1])
+# Define which observations will be used for our training set
+selection <- sample(c(rep(TRUE, times=nb.train), rep(FALSE, times=dim(teams.dt)[1]-nb.train)), dim(teams.dt)[1])
+train.teams.dt <- teams.dt[selection]
+rest <- teams.dt[!selection]
+
+# Deduce the number of samples needed in our testing set
+nb.test <- floor(test.ratio*dim(teams.dt)[1])
+# Define which observations will be used for our training set
+selection <- sample(c(rep(TRUE, times=nb.test), rep(FALSE, times=dim(rest)[1]-nb.test)), dim(rest)[1])
+test.teams.dt <- rest[selection]
+
+# Define which observations will be used for our validation set 
+validate.teams.dt <- rest[!selection]
+
+
+######################### LASSO #################################
+#formulation of the LASSO problem for train set
+X = model.matrix(win~., train.teams.dt)[, -1]
+y = train.teams.dt$win
+#define the sequence of lambdas
+lamb = 10^seq(-4, 20, length=50) 
+
+#solving LASSO for train set
+lassofit = glmnet(X, y, alpha = 1, lambda = lamb) 
+#extract coefficients
+coeflassofit = coef(lassofit) #our model
+coef(lassofit, s = 0.01) #nah, fix ce truc
+#display LASSO path
+plot.glmnet(lassofit, label= TRUE)
+
+#computing test error
+Xhat = model.matrix(win~., test.teams.dt)
+yhat = test.teams.dt$win
+errlassotrain = 1/dim(Xhat)[1]*colSums((Xhat%*%coeflassotrain - yhat)^2);
+indx = which.min(errlassotrain)
+#extracts the lambda for which the test error is the smallest
+lamb[indx] # bizarre ... genre vraiment
+
+
+######################### BEST SUBSET ###########################
+reg.teams <- regsubsets(win~. , train.teams.dt, nvmax = 58, method = "backward", really.big = TRUE)
+plot(reg.teams)
+
+####################### OTHER COMPUTINGS ########################
+model.team <- CompleteTeamModel(teams.dt)
+model.player <- CompletePlayerModel(players.dt,T)
 k.fold.results <- CompleteTeamModel_kCV(teams.dt)
