@@ -8,12 +8,14 @@
 
 setwd('~/SLProject')
 
+library(data.table)
 library(ggplot2)
 library(scales)
 library(leaps)
 library(rjson)
 source('plot.functions.R')
 source('models.R')
+source('relativeDataset.R')
 
 #<<- assign to global environnement
 ReadData <- function(){
@@ -185,6 +187,54 @@ test.teams.dt <- rest[selection]
 # Define which observations will be used for our validation set 
 validate.teams.dt <- rest[!selection]
 
+################### Create train/test set for team.dt ###########
+
+# Construct rel.team.dt
+rel.teams.dt <- relativeDataset(teams.dt)
+
+# Deduce the number of samples needed in our training set
+nb.train.rel <- floor(train.ratio*dim(rel.teams.dt)[1])
+# Define which observations will be used for our training set
+selection <- sample(c(rep(TRUE, times=nb.train.rel), rep(FALSE, times=dim(rel.teams.dt)[1]-nb.train.rel)), dim(rel.teams.dt)[1])
+train.rel.teams.dt <- rel.teams.dt[selection]
+rest <- rel.teams.dt[!selection]
+
+# Deduce the number of samples needed in our testing set
+nb.test.rel <- floor(test.ratio*dim(rel.teams.dt)[1])
+# Define which observations will be used for our training set
+selection <- sample(c(rep(TRUE, times=nb.test.rel), rep(FALSE, times=dim(rest)[1]-nb.test.rel)), dim(rest)[1])
+test.rel.teams.dt <- rest[selection]
+
+# Define which observations will be used for our validation set 
+validate.rel.teams.dt <- rest[!selection]
+
+#################### EXPLORE THE DATA ###########################
+# blue = win 
+# red = loose
+
+############### TEAMS.DT
+
+plot(train.teams.dt$kills, train.teams.dt$goldearned, xlab = "kills", ylab="gold earned", col=c("red", "blue")[train.teams.dt$win +1])
+# they look correlated
+# no advances for 
+
+plot(train.teams.dt$maxchamplvl, train.teams.dt$kills, xlab="maxchamplvl", ylab="kills", col=c("red", "blue")[train.teams.dt$win +1])
+# champion lvl influences the number of kills
+
+plot(train.teams.dt$maxchamplvl, train.teams.dt$goldearned, xlab="maxchamplvl", ylab="goldearned", col=c("red", "blue")[train.teams.dt$win +1])
+# really high lvl champions earn a lot of gold
+
+plot(train.teams.dt$minchamplvl, train.teams.dt$totdmgdealt, xlab="avgchamplvl", ylab="tot domage dealt", col=c("red", "blue")[train.teams.dt$win +1])
+
+############### REL.TEAMS.DT
+
+plot(train.rel.teams.dt$kills, train.rel.teams.dt$goldearned, xlab = "kills", ylab="gold earned", col=c("red", "blue")[train.rel.teams.dt$win +1])
+
+plot(train.rel.teams.dt$maxchamplvl, train.rel.teams.dt$kills, xlab="maxchamplvl", ylab="kills", col=c("red", "blue")[train.rel.teams.dt$win +1])
+
+plot(train.rel.teams.dt$maxchamplvl, train.rel.teams.dt$goldearned, xlab="maxchamplvl", ylab="goldearned", col=c("red", "blue")[train.rel.teams.dt$win +1])
+
+plot(train.rel.teams.dt$minchamplvl, train.rel.teams.dt$totdmgdealt, xlab="avgchamplvl", ylab="tot domage dealt", col=c("red", "blue")[train.rel.teams.dt$win +1])
 
 ######################### LASSO #################################
 #formulation of the LASSO problem for train set
