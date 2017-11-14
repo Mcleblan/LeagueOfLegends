@@ -1,0 +1,267 @@
+#loading packages and sourcing external files
+library(data.table)
+library(ggplot2)
+library(scales)
+library(leaps)
+library(rjson)
+library(MASS)
+library(glmnet)
+source('plot.functions.R')
+source('models.R')
+
+library(locfit) #for Cp
+library(glmulti)
+
+
+ReadData <- function(){
+  
+  match.dt <<-  fread('matches.csv')
+  #merging the two datasets removes 3 players from the 'participants' that do not appear in 'stats'. 
+  #My guess is they never connected to the game.
+  players.dt <<- merge(fread('participants.csv'),rbind(fread('stats1.csv'),fread('stats2.csv')),by='id')
+  teambans.dt <<- fread('teambans.csv')
+  teamstats.dt <<- fread('teamstats.csv')
+  
+}
+
+GetJsonFiles <- function(){
+#this function parses the Json files directly from the data dragon LoL API website and formats them into a R list.
+#it allows us to map the itemid, summoner spell id and champion id to their corresponding name.
+
+summoner.json <- fromJSON(file='http://ddragon.leagueoflegends.com/cdn/6.24.1/data/en_US/summoner.json')
+summoner.dt <- c()
+for(obj in summoner.json$data){
+  summoner.dt <-rbind(summoner.dt,c(obj$name,obj$key))
+}
+summoner.dt <- as.data.table(summoner.dt)
+setnames(summoner.dt,c('Name','id'))
+
+champion.json <- fromJSON(file='http://ddragon.leagueoflegends.com/cdn/6.24.1/data/en_US/champion.json')
+champion.dt <- c()
+for(obj in champion.json$data){
+  champion.dt <- rbind(champion.dt,c(obj$name,obj$key))
+}
+champion.dt <- as.data.table(champion.dt)
+setnames(champion.dt,c('Name','id'))
+
+item.json <- fromJSON(file='http://ddragon.leagueoflegends.com/cdn/6.24.1/data/en_US/item.json')
+item.dt <- c()
+for(obj in names(item.json$data)){
+  item.dt <- rbind(item.dt,c(item.json$data[[obj]]$name,as.numeric(obj)))
+}
+item.dt <- as.data.table(item.dt)
+setnames(item.dt,c('Name','id'))
+
+return(list('item' = item.dt,'summoner' = summoner.dt, 'champions' = champion.dt))
+}
+
+FormatPlayerData <- function(players.dt){
+  #removing buggy columns
+  players.dt[,wardsbought := NULL]#some erros in its fields
+  players.dt[,timecc := NULL]#always0
+  
+  #fixing one row with missing data:
+  id.bugged <- na.omit(players.dt,invert=T)$id
+  players.dt[id==id.bugged,totdmgdealt := magicdmgdealt+physicaldmgdealt]
+  players.dt[id==id.bugged,truedmgdealt := 0]
+  
+  
+  
+  #adding duration for ease of computation later on
+  #players.dt$matchid <- as.numeric(players.dt)
+  players.dt <- merge(players.dt,match.dt[,.(id,duration,queueid)],by.x='matchid',by.y='id')
+  
+  #adding the teamid to merge easily with the other datasets
+  players.dt[player <=5,teamid := 100]
+  players.dt[player >=6,teamid := 200]
+  
+  #removing the 3v3 games and the weird 3 games with only 8 and 9players(i.e. the 3 participants missing above)
+  players.dt <- players.dt[queueid %in% c(420,440)]
+  players.dt <- players.dt[!(matchid %in% players.dt[,.N,.(matchid)][N<10]$matchid)]
+  
+  #diagnostic to check I did it right :) 
+  # testing <- merge(teamstats.dt[,.(matchid,teamid,firstblood)],players.dt[,sum(firstblood),.(matchid,teamid)],by=c("matchid","teamid"))
+  # players.dt[matchid %in% testing[firstblood!=V1]$matchid, .N,.(matchid)]
+  # players.dt[, .N,.(matchid)][,.N,N]
+  
+  return(players.dt)
+}
+
+CreateTeamData <- function(players.dt){
+  #create the "team" dataset, i.e. we aggregate the players metric to a team level, by summing, averaging or taking the min max.
+  team.dt <- players.dt[,list(
+    kills = sum(kills,na.rm=T),
+    deaths = sum(deaths,na.rm=T),
+    assists = sum(assists,na.rm=T),
+    largestkillingspree = sum(largestkillingspree,na.rm=T),
+    largestmultikill = sum(largestmultikill,na.rm=T),
+    killingsprees = sum(killingsprees,na.rm=T),
+    longesttimespentliving = sum(longesttimespentliving,na.rm=T),
+    doublekills = sum(doublekills,na.rm=T),
+    triplekills = sum(triplekills,na.rm=T),
+    quadrakills = sum(quadrakills,na.rm=T),
+    pentakills = sum(pentakills,na.rm=T),
+    legendarykills = sum(legendarykills,na.rm=T),
+    totdmgdealt = sum(totdmgdealt,na.rm=T),
+    magicdmgdealt = sum(magicdmgdealt,na.rm=T),
+    physicaldmgdealt = sum(physicaldmgdealt,na.rm=T),
+    truedmgdealt = sum(truedmgdealt,na.rm=T),
+    largestcrit = max(largestcrit,na.rm=T),
+    totdmgtochamp = sum(totdmgtochamp,na.rm=T),
+    magicdmgtochamp = sum(magicdmgtochamp,na.rm=T),
+    physdmgtochamp = sum(physdmgtochamp,na.rm=T),
+    truedmgtochamp = sum(truedmgtochamp,na.rm=T),
+    totheal = sum(totheal,na.rm=T),
+    totunitshealed = sum(totunitshealed,na.rm=T),
+    dmgselfmit = sum(dmgselfmit,na.rm=T),
+    dmgtoobj = sum(dmgtoobj,na.rm=T),
+    dmgtoturrets = sum(dmgtoturrets,na.rm=T),
+    visionscore = sum(visionscore,na.rm=T),
+    #timecc = sum(timecc,na.rm=T),
+    totdmgtaken = sum(totdmgtaken,na.rm=T),
+    magicdmgtaken = sum(magicdmgtaken,na.rm=T),
+    physdmgtaken = sum(physdmgtaken,na.rm=T),
+    truedmgtaken = sum(truedmgtaken,na.rm=T),
+    goldearned = sum(goldearned,na.rm=T),
+    goldspent = sum(goldspent,na.rm=T),
+    totminionskilled = sum(totminionskilled,na.rm=T),
+    neutralminionskilled = sum(neutralminionskilled,na.rm=T),
+    ownjunglekills = sum(ownjunglekills,na.rm=T),
+    enemyjunglekills = sum(enemyjunglekills,na.rm=T),
+    totcctimedealt = sum(totcctimedealt,na.rm=T),
+    maxchamplvl = max(champlvl,na.rm=T),
+    avgchamplvl = sum(champlvl,na.rm=T)/5,
+    minchamplvl = min(champlvl,na.rm=T),
+    pinksbought = sum(pinksbought,na.rm=T),
+    wardsplaced = sum(wardsplaced,na.rm=T),
+    wardskilled = sum(wardskilled,na.rm=T)
+  ),.(matchid,teamid,duration,win)]
+  
+  #get team specific metric from teamstats
+  team.dt <- merge(teamstats.dt,team.dt,by=c('matchid','teamid'))
+  
+  return(team.dt)
+}
+
+
+#### Execution ####
+
+ReadData()
+players.dt <- FormatPlayerData(players.dt)
+teams.dt <- CreateTeamData(players.dt) 
+#id.mapping.list <- GetJsonFiles()
+
+
+
+
+#Trying to delete linear dependencies
+#Delete duration too, no effect on winning or loosing
+#Delete matchid and teamid too
+teams.dt2 = teams.dt[,!c("neutralminionskilled","harrykills","duration","matchid","teamid")]
+#Variables left = 54 
+
+
+#Problem: 54k observations have value towerkills !=0, dmgtoturrets==0!! Remove them?
+turrets  <- teams.dt[,c("matchid","teamid","dmgtoturrets","towerkills")]
+sub <- subset(turrets, turrets$dmgtoturrets == 0)
+sub2 <- subset(sub, sub$towerkills !=0)
+#View(sub2)
+teams.dt2 = subset(teams.dt2, (teams.dt2$dmgtoturrets == 0 & teams.dt2$towerkills != 0) == FALSE)
+
+#### Make a training set ####
+#train = 50% for train
+#test = 25% 
+set.seed(1)
+train = sample(1:nrow(teams.dt2), floor(0.5*nrow(teams.dt2)))
+test = sample(1:nrow(teams.dt2), floor(0.25*nrow(teams.dt2)))
+
+teams.train = teams.dt2[train,]
+teams.test = teams.dt2[test,]
+
+#### Best Subsets selection ####
+
+####Forward ####
+BestFW = regsubsets(win ~., teams.train, nvmax = 54, nbest =1,  method = "forward")
+BestFW.summ = summary(BestFW)
+plot(BestFW, scale ='r2')
+
+BestFW.by.cp <- which.min(BestFW.summ$cp)       # k=49
+BestFW.by.adjr2 <- which.max(BestFW.summ$adjr2) # k=49
+BestFW.by.bic <- which.min(BestFW.summ$bic)     # k=36
+
+#plots for r2,cp,adjr2, bic
+plot(BestFW$rss, xlab="Number of Variables", ylab="RSS")
+plot(BestFW.summ$adjr2, xlab="Number of Variables", ylab="Adjusted RSq")
+points(BestFW.by.adjr2, BestFW.summ$adjr2[BestFW.by.adjr2], col="red", cex =2, pch =20)
+plot(BestFW.summ$cp, xlab="Number of Variables", ylab="CP")
+points(BestFW.by.cp, BestFW.summ$cp[BestFW.by.cp], col="red", cex =2, pch =20)
+plot(BestFW.summ$bic, xlab="Number of Variables", ylab="BIC")
+points(BestFW.by.bic, BestFW.summ$bic[BestFW.by.bic], col="red", cex =2, pch =20)
+
+#Selectionned variables for BIC
+which(BestFW.summ$outmat[36,] == c("*"))
+#Selectionned variables for cp
+which(BestFW.summ$outmat[49,] == c("*"))
+
+####Backward ####
+BestBW = regsubsets(win ~., teams.train, nvmax = 54, nbest = 1,method = 'backward')
+BestBW.summ = summary(BestBW)
+
+BestBW.by.cp <- which.min(BestBW.summ$cp)       # 48
+BestBW.by.adjr2 <- which.max(BestBW.summ$adjr2) # 48
+BestBW.by.bic <- which.min(BestBW.summ$bic)     #37
+
+#plots for r2,cp,adjr2, bic
+plot(BestBW$rss, xlab="Number of Variables", ylab="RSS")
+plot(BestBW.summ$adjr2, xlab="Number of Variables", ylab="Adjusted RSq")
+points(BestBW.by.adjr2, BestBW.summ$adjr2[BestBW.by.adjr2], col="red", cex =2, pch =20)
+plot(BestBW.summ$cp, xlab="Number of Variables", ylab="CP")
+points(BestBW.by.cp, BestBW.summ$cp[BestBW.by.cp], col="red", cex =2, pch =20)
+plot(BestBW.summ$bic, xlab="Number of Variables", ylab="BIC")
+points(BestBW.by.bic, BestBW.summ$bic[BestBW.by.bic], col="red", cex =2, pch =20)
+
+#Selectionned variables for BIC
+which(BestFW.summ$outmat[37,] == c("*"))
+#Selectionned variables for cp
+which(BestFW.summ$outmat[48,] == c("*"))
+
+
+
+
+
+
+
+####In which order variables are added in forward and backward ####
+AddedFW <- c(which(BestFW.summ$which[1,]))
+AddedBW <- c(which(BestBW.summ$which[1,]))
+for (k in 2:53){
+  newF = which((BestFW.summ$which[k,] == TRUE) &  (BestFW.summ$which[k-1,] == FALSE))
+  newB = which((BestBW.summ$which[k,] == TRUE) &  (BestBW.summ$which[k-1,] == FALSE))
+  
+  AddedFW = c(AddedFW, newF)
+  AddedBW = c(AddedBW, newB)
+}
+#Delete "Intercept"
+AddedFW =AddedFW[-1]
+AddedBW =AddedBW[-1]
+#Moche mais on voit l'idée
+View(AddedFW)
+View(AddedBW)
+
+
+
+####Lasso, ridge, by Glmnet####
+grid = 10^seq(10,-4, length = 150)
+FitLasso <- glmnet(y = teams.train[,win], x =as.matrix(teams.train[,!c("win")]), family = 'binomial', alpha = 1, lambda = grid)
+plot(FitLasso, label = 'TRUE')
+
+coeflassofit = coef(FitLasso)
+Xhat = model.matrix(win~.,teams.test)
+yhat=teams.test$win
+errlassotrain = 1/nrow(Xhat)*colSums((Xhat%*%coeflassofit - yhat)^2)
+grid[which.min(errlassotrain)]  #lambda = 0.299
+
+FitLassoLambda <- glmnet(y = teams.train[,win], x =as.matrix(teams.train[,!c("win")]), family = 'binomial', alpha = 1, lambda = 0.299)
+coef(FitLasso, s = 0.299)
+#For this lambda, only two variables left: firstinhib & towerkills
+#Coherent with forward & backward for towerkills
